@@ -11,7 +11,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 
-from posts.models import Comment
+from posts.models import Comment, Post
 from posts.serializers import (
     PostSerializer, 
     PostCreateUpdateSerializer,
@@ -327,13 +327,25 @@ class CommentDetailView(APIView):
 
 class TechPostListView(APIView):
     """기술 블로그 목록"""
-    permission_classes = [IsAuthenticatedOrReadOnly]
-    service = PostService()
+    permission_classes = [AllowAny]
 
     def get(self, request):
-        category = request.query_params.get('category')
-        posts = self.service.get_tech_posts(category)
-        return Response(PostSerializer(posts, many=True).data)
+        posts = Post.objects.filter(category='tech').order_by('-created_at')
+        serializer = PostSerializer(posts, many=True)
+        return Response(serializer.data)
+
+    def post(self, request):
+        if not request.user.is_authenticated:
+            return Response(
+                {"detail": "인증이 필요합니다."}, 
+                status=status.HTTP_401_UNAUTHORIZED
+            )
+            
+        serializer = PostSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save(author=request.user, category='tech')
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
 class FreeBoardView(APIView):

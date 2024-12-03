@@ -38,11 +38,9 @@ class Post(models.Model):
         default=BoardType.FREE
     )
     category = models.CharField(
-        max_length=20,
-        choices=ProgrammingLanguage.choices,
-        null=True,
-        blank=True,  # 자유게시판/방명록은 카테고리 선택 불필요
-        help_text='기술 블로그 작성 시 필수 선택'
+        max_length=10,
+        choices=BoardType.choices,
+        default='free'
     )
     image = models.ImageField(
         upload_to='posts/%Y/%m/%d/',

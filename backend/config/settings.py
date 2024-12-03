@@ -176,7 +176,6 @@ CORS_ALLOW_ALL_ORIGINS = True  # 개발 환경에서만 사용
 CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
-    "http://127.0.0.1:3000",
 ]
 
 # 이미지 업로드 설정

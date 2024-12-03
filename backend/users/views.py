@@ -1,17 +1,15 @@
-from rest_framework import status
+from rest_framework import status, serializers
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework_simplejwt.views import TokenObtainPairView
-from rest_framework_simplejwt.tokens import RefreshToken
-from django.contrib.auth import get_user_model
+from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from django.core.exceptions import ValidationError
+from rest_framework_simplejwt.tokens import RefreshToken
 
-from users.serializers import UserSerializer, UserCreateSerializer
-from users.services import UserService
+from users.serializers import UserSerializer, UserRegisterSerializer
 from users.models import User
-
-User = get_user_model()
+from users.services import UserService
 
 
 class UserRegisterView(APIView):
@@ -35,20 +33,23 @@ class UserRegisterView(APIView):
         400 Bad Request - 유효하지 않은 데이터
     """
     permission_classes = [AllowAny]  # 인증되지 않은 사용자도 접근 가능
-    service = UserService()  # 추가
     
     def post(self, request):
-        serializer = UserCreateSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
         try:
-            # create_user 메서드 사용
-            user = self.service.create_user(**serializer.validated_data)
+            serializer = UserRegisterSerializer(data=request.data)
+            if serializer.is_valid(raise_exception=True):
+                user = serializer.save()
+                return Response(
+                    UserSerializer(user).data,
+                    status=status.HTTP_201_CREATED
+                )
+        except serializers.ValidationError as e:
+            return Response(e.detail, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
             return Response(
-                UserSerializer(user).data,
-                status=status.HTTP_201_CREATED
+                {'error': str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
-        except ValidationError as e:
-            return Response(e.message_dict, status=status.HTTP_400_BAD_REQUEST)
 
 
 class UserProfileView(APIView):
@@ -73,7 +74,6 @@ class UserProfileView(APIView):
         400 Bad Request - 유효하지 않은 데이터
     """
     permission_classes = [IsAuthenticated]  # 인증된 사용자만 접근 가능
-    service = UserService()  # 비즈니스 로직을 처리할 서비스 클래스
     
     def get(self, request):
         """현재 로그인한 사용자의 프로필 정보를 조회"""
@@ -90,16 +90,10 @@ class UserProfileView(APIView):
             data=request.data,
             partial=True  # 부분 업데이트 허용
         )
-        serializer.is_valid(raise_exception=True)
-        try:
-            # update_profile 메서드 사용
-            user = self.service.update_profile(
-                request.user,
-                **serializer.validated_data
-            )
+        if serializer.is_valid():
+            user = serializer.save()
             return Response(UserSerializer(user).data)
-        except ValidationError as e:
-            return Response(e.message_dict, status=status.HTTP_400_BAD_REQUEST)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
 class ChangePasswordView(APIView):
@@ -119,26 +113,37 @@ class ChangePasswordView(APIView):
             return Response(e.message_dict, status=status.HTTP_400_BAD_REQUEST)
 
 
-class LoginView(TokenObtainPairView):
-    """로그인 API View"""
-    def post(self, request, *args, **kwargs):
-        try:
-            response = super().post(request, *args, **kwargs)
-            # 토큰에서 user_id를 추출하여 사용자 정보 조회
-            from rest_framework_simplejwt.tokens import AccessToken
-            token = response.data['access']
-            user_id = AccessToken(token)['user_id']
-            user = User.objects.get(id=user_id)
+class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
+    username_field = 'email'
 
-            return Response({
-                'token': {
-                    'access': response.data['access'],
-                    'refresh': response.data['refresh']
-                },
+    def validate(self, attrs):
+        email = attrs.get('email')
+        password = attrs.get('password')
+
+        if not email or not password:
+            raise serializers.ValidationError({
+                'detail': '이메일과 비밀번호를 모두 입력해주세요.'
+            })
+
+        try:
+            user = User.objects.get(email=email)
+            if not user.check_password(password):
+                raise serializers.ValidationError({
+                    'detail': '이메일 또는 비밀번호가 올바르지 않습니다.'
+                })
+
+            refresh = RefreshToken.for_user(user)
+            return {
+                'access': str(refresh.access_token),
+                'refresh': str(refresh),
                 'user': UserSerializer(user).data
-            }, status=response.status_code)
-        except Exception as e:
-            return Response(
-                {'error': str(e)}, 
-                status=status.HTTP_400_BAD_REQUEST
-            )
+            }
+
+        except User.DoesNotExist:
+            raise serializers.ValidationError({
+                'detail': '이메일 또는 비밀번호가 올바르지 않습니다.'
+            })
+
+
+class CustomTokenObtainPairView(TokenObtainPairView):
+    serializer_class = CustomTokenObtainPairSerializer
