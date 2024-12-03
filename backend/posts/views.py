@@ -16,6 +16,7 @@ from posts.serializers import (
     CommentSerializer
 )
 from posts.services import PostService
+from posts.permissions import BoardTypePermission
 
 
 class PostListCreateView(APIView):
@@ -42,19 +43,20 @@ class PostListCreateView(APIView):
         401 Unauthorized: 인증되지 않은 사용자 (POST 시)
         400 Bad Request: 유효하지 않은 데이터
     """
-    permission_classes = [IsAuthenticatedOrReadOnly]  # GET은 모두 허용, POST는 인증 필요
+    permission_classes = [BoardTypePermission]  # 게시판별 권한 적용
     service = PostService()
     
     def get(self, request):
-        """게시글 목록 조회
-        최신순으로 정렬된 게시글 목록을 반환합니다.
-        """
+        """게시글 목록 조회"""
         query = request.query_params.get('search')
-        if query:
-            posts = self.service.search_posts(query)
-        else:
-            posts = self.service.get_recent_posts()
-            
+        board_type = request.query_params.get('board_type')
+        category = request.query_params.get('category')
+        
+        posts = self.service.search_posts(
+            query=query,
+            board_type=board_type,
+            category=category
+        )
         serializer = PostSerializer(posts, many=True)
         return Response(serializer.data)
     
@@ -110,6 +112,10 @@ class PostDetailView(APIView):
         post = self.service.get(id=pk)
         if not post:
             return Response(status=status.HTTP_404_NOT_FOUND)
+            
+        # 조회수 증가
+        post.increase_views()
+        
         return Response(PostSerializer(post).data)
     
     def put(self, request, pk):
@@ -212,7 +218,7 @@ class CommentListCreateView(APIView):
         
         post = self.service.get(id=post_id)
         if not post:
-            print(f"Post {post_id} not found")  # 디버그 로��
+            print(f"Post {post_id} not found")  # 디버그 로그
             return Response(
                 {"error": "게시글을 찾을 수 없습니다."}, 
                 status=status.HTTP_404_NOT_FOUND

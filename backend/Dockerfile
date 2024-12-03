@@ -11,6 +11,7 @@ RUN apt-get update && \
     libjpeg-dev \
     libpng-dev \
     jq \
+    imagemagick \
     && rm -rf /var/lib/apt/lists/*
 
 # Poetry 설치

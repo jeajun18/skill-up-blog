@@ -23,8 +23,17 @@ REGISTER_RESPONSE=$(curl -s -X POST "${API_URL}/users/register/" \
 if [[ $REGISTER_RESPONSE == *"id"* ]]; then
     echo -e "${GREEN}✓ Registration successful${NC}"
     echo $REGISTER_RESPONSE | jq '.'
-    # 사용자명 저장
-    echo $REGISTER_RESPONSE | jq -r '.username' > tests/api/last_username.txt
+    
+    # Django 관리자 권한 부여
+    USER_ID=$(echo $REGISTER_RESPONSE | jq -r '.id')
+    docker compose exec -T backend python manage.py shell -c "
+from django.contrib.auth import get_user_model;
+User = get_user_model();
+user = User.objects.get(id=$USER_ID);
+user.is_staff = True;
+user.save()
+"
+    echo -e "${GREEN}✓ Admin privileges granted${NC}"
 else
     echo -e "${RED}✗ Registration failed${NC}"
     echo $REGISTER_RESPONSE | jq '.'

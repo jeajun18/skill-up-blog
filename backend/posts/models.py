@@ -49,6 +49,7 @@ class Post(models.Model):
         null=True,
         blank=True
     )
+    views = models.PositiveIntegerField(default=0)
 
     class Meta:
         db_table = "posts"
@@ -65,6 +66,11 @@ class Post(models.Model):
                 'markdown.extensions.codehilite'
             ]
         )
+
+    def increase_views(self):
+        """조회수 증가"""
+        self.views = models.F('views') + 1
+        self.save(update_fields=['views'])
 
 
 class Like(models.Model):

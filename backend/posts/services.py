@@ -61,12 +61,34 @@ class PostService(BaseService[Post]):
             **extra_fields
         )
 
-    def search_posts(self, query: str) -> List[Post]:
-        """게시글을 검색합니다."""
-        return self.filter(
-            Q(title__icontains=query) |
-            Q(content__icontains=query)
-        )
+    def search_posts(
+        self, 
+        query: str = None, 
+        board_type: str = None, 
+        category: str = None
+    ) -> List[Post]:
+        """게시글 검색
+        
+        Args:
+            query: 검색어
+            board_type: 게시판 유형
+            category: 프로그래밍 언어 카테고리
+        """
+        queryset = self.get_queryset()
+        
+        if board_type:
+            queryset = queryset.filter(board_type=board_type)
+            
+        if category and board_type == BoardType.TECH:
+            queryset = queryset.filter(category=category)
+            
+        if query:
+            queryset = queryset.filter(
+                Q(title__icontains=query) |
+                Q(content__icontains=query)
+            )
+            
+        return queryset.order_by('-created_at')
 
     def get_posts_by_date_range(
         self, 

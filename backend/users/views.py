@@ -5,6 +5,7 @@ from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth import get_user_model
+from django.core.exceptions import ValidationError
 
 from users.serializers import UserSerializer, UserCreateSerializer
 from users.services import UserService
@@ -108,7 +109,7 @@ class ChangePasswordView(APIView):
 
     def post(self, request):
         try:
-            user = self.service.change_password(
+            self.service.change_password(
                 request.user,
                 old_password=request.data.get('old_password'),
                 new_password=request.data.get('new_password')
