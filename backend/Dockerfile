@@ -10,6 +10,7 @@ RUN apt-get update && \
     python3-dev \
     libjpeg-dev \
     libpng-dev \
+    jq \
     && rm -rf /var/lib/apt/lists/*
 
 # Poetry 설치

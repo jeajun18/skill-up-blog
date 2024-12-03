@@ -1,0 +1,81 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:latest
+        env:
+          POSTGRES_DB: blog_test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.12'
+
+    - name: Install Poetry
+      run: |
+        curl -sSL https://install.python-poetry.org | python3 -
+
+    - name: Install dependencies
+      working-directory: ./backend
+      run: |
+        poetry install
+
+    - name: Run linters
+      working-directory: ./backend
+      run: |
+        poetry run black . --check
+        poetry run isort . --check
+        poetry run flake8 .
+
+    - name: Run tests
+      working-directory: ./backend
+      env:
+        DEBUG: 1
+        SECRET_KEY: test-key-not-used-in-production
+        POSTGRES_DB: blog_test
+        POSTGRES_USER: postgres
+        POSTGRES_PASSWORD: postgres
+        POSTGRES_HOST: localhost
+      run: |
+        poetry run pytest
+
+    - name: Run API tests
+      working-directory: ./backend
+      env:
+        DEBUG: 1
+        SECRET_KEY: test-key-not-used-in-production
+        POSTGRES_DB: blog_test
+        POSTGRES_USER: postgres
+        POSTGRES_PASSWORD: postgres
+        POSTGRES_HOST: localhost
+      run: |
+        poetry run python manage.py migrate
+        poetry run python manage.py runserver &
+        sleep 5
+        cd ..
+        chmod +x tests/api/*.sh
+        ./tests/api/auth_test.sh
+        ./tests/api/post_test.sh
+        ./tests/api/board_test.sh 
