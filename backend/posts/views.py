@@ -7,18 +7,21 @@ from rest_framework.permissions import (
     IsAuthenticatedOrReadOnly,
     AllowAny
 )
+from django.views.decorators.csrf import csrf_exempt
+from django.utils.decorators import method_decorator
+from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 
 from posts.models import Comment
 from posts.serializers import (
     PostSerializer, 
     PostCreateUpdateSerializer,
-    PostDetailSerializer,
     CommentSerializer
 )
 from posts.services import PostService
 from posts.permissions import BoardTypePermission
 
 
+@method_decorator(csrf_exempt, name='dispatch')
 class PostListCreateView(APIView):
     """게시글 목록 조회 및 생성 API View
     
@@ -44,6 +47,7 @@ class PostListCreateView(APIView):
         400 Bad Request: 유효하지 않은 데이터
     """
     permission_classes = [BoardTypePermission]  # 게시판별 권한 적용
+    parser_classes = (MultiPartParser, FormParser, JSONParser)
     service = PostService()
     
     def get(self, request):
@@ -61,22 +65,43 @@ class PostListCreateView(APIView):
         return Response(serializer.data)
     
     def post(self, request):
-        """새 게시글 생성
-        현재 로그인한 사용자를 작성자로 하여 게시글을 생성합니다.
-        """
-        serializer = PostCreateUpdateSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
+        """새 게시글 생성"""
         try:
+            # 이미지 파일이 있는 경우
+            if 'image' in request.FILES:
+                serializer = PostCreateUpdateSerializer(
+                    data=request.data,
+                    context={'request': request}
+                )
+            else:
+                serializer = PostCreateUpdateSerializer(data=request.data)
+            
+            if not serializer.is_valid():
+                return Response(
+                    {'error': serializer.errors}, 
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
             post = self.service.create_post(
                 author=request.user,
                 **serializer.validated_data
             )
+            
             return Response(
                 PostSerializer(post).data,
                 status=status.HTTP_201_CREATED
             )
         except ValidationError as e:
-            return Response(e.message_dict, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {'error': str(e)}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        except Exception as e:
+            print(f"Unexpected error: {e}")  # 디버그용
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
 
 class PostDetailView(APIView):

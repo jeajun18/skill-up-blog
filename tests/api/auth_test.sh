@@ -11,7 +11,7 @@ NC='\033[0m'
 
 # 회원가입 테스트
 echo "Testing user registration..."
-REGISTER_RESPONSE=$(curl -s -X POST "${API_URL}/users/register/" \
+REGISTER_RESPONSE=$(curl -v -s -X POST "${API_URL}/users/register/" \
 -H "${CONTENT_TYPE}" \
 -d '{
     "username": "testuser_'$(date +%s)'",
@@ -20,12 +20,15 @@ REGISTER_RESPONSE=$(curl -s -X POST "${API_URL}/users/register/" \
     "bio": "Hello, I am a test user"
 }')
 
+echo "Registration response:"
+echo "$REGISTER_RESPONSE"
+
 if [[ $REGISTER_RESPONSE == *"id"* ]]; then
     echo -e "${GREEN}✓ Registration successful${NC}"
-    echo $REGISTER_RESPONSE | jq '.'
+    echo "$REGISTER_RESPONSE" | jq '.'
     
     # Django 관리자 권한 부여
-    USER_ID=$(echo $REGISTER_RESPONSE | jq -r '.id')
+    USER_ID=$(echo "$REGISTER_RESPONSE" | jq -r '.id')
     docker compose exec -T backend python manage.py shell -c "
 from django.contrib.auth import get_user_model;
 User = get_user_model();
@@ -36,7 +39,7 @@ user.save()
     echo -e "${GREEN}✓ Admin privileges granted${NC}"
 else
     echo -e "${RED}✗ Registration failed${NC}"
-    echo $REGISTER_RESPONSE | jq '.'
+    echo "$REGISTER_RESPONSE" | jq '.' || echo "$REGISTER_RESPONSE"
 fi
 
 # 로그인 테스트

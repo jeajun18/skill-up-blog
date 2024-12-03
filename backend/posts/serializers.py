@@ -2,6 +2,7 @@ from rest_framework import serializers
 from posts.models import Post, Like, Comment, BoardType
 from users.serializers import UserSerializer
 from django.core.exceptions import ValidationError
+from django.conf import settings
 
 
 class PostSerializer(serializers.ModelSerializer):
@@ -31,10 +32,9 @@ class PostSerializer(serializers.ModelSerializer):
 
 
 class PostCreateUpdateSerializer(serializers.ModelSerializer):
-    """게시글 생성 및 수정을 위한 Serializer
+    """게시글 생성/수정을 위한 Serializer"""
+    image = serializers.ImageField(required=False)
     
-    작성자 정보는 뷰에서 자동으로 설정
-    """
     class Meta:
         model = Post
         fields = [
@@ -57,6 +57,12 @@ class PostCreateUpdateSerializer(serializers.ModelSerializer):
                 'category': '기술 블로그 작성 시 카테고리 선택은 필수입니다.'
             })
         return data
+
+    def validate_image(self, value):
+        """이미지 파일 유효성 검사"""
+        if value and value.size > settings.MAX_UPLOAD_SIZE:
+            raise ValidationError(f'이미지 크기는 {settings.MAX_UPLOAD_SIZE/1024/1024}MB를 초과할 수 없습니다.')
+        return value
 
 
 class CommentSerializer(serializers.ModelSerializer):

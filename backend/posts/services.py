@@ -1,6 +1,9 @@
 from typing import List, Optional
 from django.core.exceptions import ValidationError
 from django.db.models import Q
+from PIL import Image
+from io import BytesIO
+from django.core.files.uploadedfile import InMemoryUploadedFile
 
 from core.base_service import BaseService
 from posts.models import Post, Like, Comment, BoardType
@@ -54,6 +57,10 @@ class PostService(BaseService[Post]):
         if board_type != BoardType.GUEST and len(content) < 10:
             raise ValidationError({"content": "내용은 최소 10자 이상이어야 합니다."})
 
+        # 이미지 최적화
+        if 'image' in extra_fields and extra_fields['image']:
+            extra_fields['image'] = self.optimize_image(extra_fields['image'])
+        
         return self.create(
             author=author,
             title=title,
@@ -239,4 +246,42 @@ class PostService(BaseService[Post]):
         return self.filter(
             board_type=BoardType.GUEST
         ).order_by('-created_at')
+    
+    def optimize_image(
+        self, 
+        image: InMemoryUploadedFile, 
+        max_size: int = 800
+    ) -> InMemoryUploadedFile:
+        """이미지 최적화
+        
+        - 이미지 리사이징 (max_size 기준)
+        - WebP 포맷으로 변환
+        - 품질 최적화
+        """
+        img = Image.open(image)
+        
+        # 리사이징
+        if img.width > max_size or img.height > max_size:
+            ratio = min(max_size/img.width, max_size/img.height)
+            new_size = (int(img.width * ratio), int(img.height * ratio))
+            img = img.resize(new_size, Image.Resampling.LANCZOS)
+        
+        # WebP로 변환
+        output = BytesIO()
+        if img.mode in ('RGBA', 'LA'):
+            background = Image.new('RGB', img.size, (255, 255, 255))
+            background.paste(img, mask=img.split()[-1])
+            img = background
+        
+        img.save(output, format='WebP', quality=85, optimize=True)
+        output.seek(0)
+        
+        return InMemoryUploadedFile(
+            output,
+            'ImageField',
+            f"{image.name.split('.')[0]}.webp",
+            'image/webp',
+            output.getbuffer().nbytes,
+            None
+        )
   
